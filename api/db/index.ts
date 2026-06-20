@@ -27,7 +27,22 @@ export function runMigrations() {
   for (const file of migrationFiles) {
     const filePath = path.join(migrationsDir, file);
     const sql = fs.readFileSync(filePath, 'utf-8');
-    db.exec(sql);
+    const statements = sql
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    for (const stmt of statements) {
+      try {
+        db.exec(stmt);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('duplicate column name')) {
+          continue;
+        }
+        throw err;
+      }
+    }
     console.log(`Migration executed: ${file}`);
   }
 }

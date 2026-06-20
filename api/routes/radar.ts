@@ -246,6 +246,8 @@ router.get('/matches', (req: Request, res: Response): void => {
   try {
     checkAndCreateMatches();
 
+    const { scriptName, city, unreadOnly } = req.query;
+
     const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
     const matchRows = db.prepare('SELECT * FROM fleet_matches ORDER BY matched_at DESC').all() as MatchRow[];
     const subRows = db.prepare('SELECT * FROM radar_subscriptions').all() as SubscriptionRow[];
@@ -255,6 +257,11 @@ router.get('/matches', (req: Request, res: Response): void => {
     for (const row of matchRows) {
       const fleetRow = db.prepare('SELECT * FROM fleets WHERE id = ?').get(row.fleet_id) as FleetRow | undefined;
       if (!fleetRow || !isFleetInFuture(fleetRow)) continue;
+
+      if (scriptName && typeof scriptName === 'string' && fleetRow.script_name !== scriptName) continue;
+      if (city && typeof city === 'string' && fleetRow.city !== city) continue;
+      if (unreadOnly === '1' && row.is_read === 1) continue;
+
       const hostRow = db.prepare('SELECT * FROM users WHERE id = ?').get(fleetRow.host_id) as UserRow;
       const host = mapUserRow(hostRow, reviewRows);
       const fleet = mapFleetRow(fleetRow, host);

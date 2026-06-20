@@ -1,18 +1,23 @@
 import { useEffect } from 'react';
-import { MapPin, Search, FileText } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MapPin, Search, FileText, Bell } from 'lucide-react';
 import { useFleetStore } from '../store/useFleetStore';
+import { useRadarStore } from '../store/useRadarStore';
 import { FilterBar } from '../components/FilterBar';
 import { FleetCard } from '../components/FleetCard';
 
 export default function Home() {
   const { fleets, filters, loading, error, fetchFleets } = useFleetStore();
+  const { matches, fetchMatches } = useRadarStore();
 
   useEffect(() => {
     fetchFleets();
-  }, [fetchFleets]);
+    fetchMatches();
+  }, [fetchFleets, fetchMatches]);
 
   const cityLimitedCount = fleets.filter((f) => f.isCityLimited).length;
   const recruitingCount = fleets.filter((f) => f.status === 'recruiting').length;
+  const unreadCount = Array.isArray(matches) ? matches.filter((m) => !m.isRead).length : 0;
 
   return (
     <div className="space-y-8">
@@ -78,6 +83,20 @@ export default function Home() {
                 <p className="text-sm text-parchment-200/50">城限本</p>
               </div>
             </div>
+
+            {unreadCount > 0 && (
+              <Link to="/radar" className="flex items-center gap-3 group cursor-pointer">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center animate-pulse-amber">
+                  <Bell className="w-6 h-6 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-display text-2xl font-bold text-emerald-400">
+                    {unreadCount}
+                  </p>
+                  <p className="text-sm text-emerald-300/70">新匹配提醒</p>
+                </div>
+              </Link>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-3">

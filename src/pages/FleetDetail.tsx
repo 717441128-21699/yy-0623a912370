@@ -4,6 +4,7 @@ import { MapPin, Clock, Users, Calendar, FileText, ArrowLeft, AlertTriangle } fr
 import { useFleetStore } from '../store/useFleetStore';
 import { HostProfile } from '../components/HostProfile';
 import { ApplicationForm } from '../components/ApplicationForm';
+import { ApplicationTimeline } from '../components/ApplicationTimeline';
 import { applicationApi } from '../utils/api';
 import { useUserStore } from '../store/useUserStore';
 import type { Application } from '../../shared';
@@ -229,44 +230,30 @@ export default function FleetDetail() {
               </div>
             </div>
           ) : userApplication ? (
-            <div className="card p-8 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-600/20 flex items-center justify-center">
-                <FileText className="w-8 h-8 text-emerald-400" />
-              </div>
-              <h3 className="font-display text-xl font-bold text-parchment-100 mb-2">
-                您已提交申请
-              </h3>
-              <p className="text-parchment-200/70 mb-2">
-                申请状态：
-                <span className={`ml-2 font-medium ${
-                  userApplication.status === 'approved' ? 'text-emerald-400'
-                  : userApplication.status === 'rejected' ? 'text-wine-400'
-                  : userApplication.status === 'waitlisted' ? 'text-amber-400'
-                  : 'text-amber-300'
-                }`}>
-                  {userApplication.status === 'approved' ? '✅ 已通过'
-                  : userApplication.status === 'rejected' ? '❌ 未通过'
-                  : userApplication.status === 'waitlisted' ? '⏳ 候补中'
-                  : '🔍 审核中'}
-                </span>
-              </p>
-              {userApplication.status === 'pending' && (
-                <p className="text-parchment-200/50 text-sm">
-                  发起人将在 24 小时内审核您的申请，请耐心等待
-                </p>
-              )}
-              {userApplication.preferredRoles && userApplication.preferredRoles.length > 0 && (
-                <div className="mt-4 p-4 bg-noir-800/50 rounded-lg text-left">
-                  <p className="text-xs text-amber-300/70 mb-2">已选角色</p>
-                  <div className="flex flex-wrap gap-1">
-                    {userApplication.preferredRoles.map((r) => (
-                      <span key={r} className="px-2 py-1 text-xs rounded bg-noir-700 text-parchment-200/80">
-                        {r}
-                      </span>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              <div className="card p-6 text-center">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-emerald-600/20 flex items-center justify-center">
+                  <FileText className="w-7 h-7 text-emerald-400" />
                 </div>
-              )}
+                <h3 className="font-display text-xl font-bold text-parchment-100 mb-2">
+                  您已提交申请
+                </h3>
+                <p className="text-parchment-200/70">
+                  申请状态：
+                  <span className={`ml-2 font-medium ${
+                    userApplication.status === 'approved' ? 'text-emerald-400'
+                    : userApplication.status === 'rejected' ? 'text-wine-400'
+                    : userApplication.status === 'waitlisted' ? 'text-amber-400'
+                    : 'text-amber-300'
+                  }`}>
+                    {userApplication.status === 'approved' ? '✅ 已通过'
+                    : userApplication.status === 'rejected' ? '❌ 未通过'
+                    : userApplication.status === 'waitlisted' ? '⏳ 候补中'
+                    : '🔍 审核中'}
+                  </span>
+                </p>
+              </div>
+              <ApplicationTimeline application={userApplication} />
             </div>
           ) : currentFleet.status === 'recruiting' && missingPlayers > 0 ? (
             <ApplicationForm

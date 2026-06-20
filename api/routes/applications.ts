@@ -13,6 +13,8 @@ interface ApplicationRow {
   acceptable_end_time: string;
   willing_to_waitlist: number;
   status: string;
+  status_timeline: string;
+  viewed_at: string | null;
   created_at: string;
 }
 
@@ -35,6 +37,11 @@ interface ReviewRow {
   rating: number;
   comment: string;
   created_at: string;
+}
+
+interface TimelineEntry {
+  status: string;
+  timestamp: string;
 }
 
 function mapUserRow(row: UserRow, reviews: ReviewRow[]): User {
@@ -79,6 +86,8 @@ function mapApplicationRow(row: ApplicationRow, user?: User): Application {
     acceptableEndTime: row.acceptable_end_time,
     willingToWaitlist: row.willing_to_waitlist === 1,
     status: row.status as Application['status'],
+    statusTimeline: JSON.parse(row.status_timeline || '[]'),
+    viewedAt: row.viewed_at,
     createdAt: row.created_at,
   };
 }
@@ -99,12 +108,19 @@ router.post('/:fleetId/applications', (req: Request, res: Response): void => {
       return;
     }
 
+    const existing = db.prepare('SELECT id FROM applications WHERE fleet_id = ? AND user_id = ?').get(fleetId, input.userId);
+    if (existing) {
+      res.status(409).json({ success: false, error: 'Already applied' });
+      return;
+    }
+
     const id = `a${Date.now()}`;
     const createdAt = new Date().toISOString();
+    const timeline: TimelineEntry[] = [{ status: 'pending', timestamp: createdAt }];
 
     db.prepare(
-      `INSERT INTO applications (id, fleet_id, user_id, preferred_roles, red_flags, acceptable_end_time, willing_to_waitlist, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO applications (id, fleet_id, user_id, preferred_roles, red_flags, acceptable_end_time, willing_to_waitlist, status, status_timeline, viewed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     ).run(
       id,
       fleetId,
@@ -114,6 +130,7 @@ router.post('/:fleetId/applications', (req: Request, res: Response): void => {
       input.acceptableEndTime,
       input.willingToWaitlist ? 1 : 0,
       'pending',
+      JSON.stringify(timeline),
       createdAt
     );
 
@@ -156,6 +173,34 @@ router.get('/:fleetId/applications', (req: Request, res: Response): void => {
   }
 });
 
+router.put('/:id/view', (req: Request, res: Response): void => {
+  const { id } = req.params;
+
+  try {
+    const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(id) as ApplicationRow | undefined;
+    if (!application) {
+      res.status(404).json({ success: false, error: 'Application not found' });
+      return;
+    }
+
+    if (!application.viewed_at) {
+      const now = new Date().toISOString();
+      db.prepare('UPDATE applications SET viewed_at = ? WHERE id = ?').run(now, id);
+    }
+
+    const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
+    const applicationRow = db.prepare('SELECT * FROM applications WHERE id = ?').get(id) as ApplicationRow;
+    const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(applicationRow.user_id) as UserRow;
+    const user = mapUserRow(userRow, reviewRows);
+    const updatedApplication = mapApplicationRow(applicationRow, user);
+
+    res.json({ success: true, data: updatedApplication });
+  } catch (error) {
+    console.error('Error marking application as viewed:', error);
+    res.status(500).json({ success: false, error: 'Failed to mark as viewed' });
+  }
+});
+
 router.put('/:id/status', (req: Request, res: Response): void => {
   const { id } = req.params;
   const { status } = req.body as { status: string };
@@ -172,11 +217,24 @@ router.put('/:id/status', (req: Request, res: Response): void => {
       return;
     }
 
-    db.prepare('UPDATE applications SET status = ? WHERE id = ?').run(status, id);
+    const now = new Date().toISOString();
+    const timeline: TimelineEntry[] = JSON.parse(application.status_timeline || '[]');
+    timeline.push({ status, timestamp: now });
+
+    db.prepare('UPDATE applications SET status = ?, status_timeline = ? WHERE id = ?').run(status, JSON.stringify(timeline), id);
 
     if (status === 'approved') {
       db.prepare('UPDATE fleets SET current_players = current_players + 1 WHERE id = ?').run(application.fleet_id);
       db.prepare("UPDATE fleets SET status = 'full' WHERE id = ? AND current_players >= total_players").run(application.fleet_id);
+    }
+
+    if (status === 'rejected' && application.status === 'approved') {
+      db.prepare('UPDATE fleets SET current_players = MAX(1, current_players - 1) WHERE id = ?').run(application.fleet_id);
+      db.prepare("UPDATE fleets SET status = 'recruiting' WHERE id = ? AND current_players < total_players").run(application.fleet_id);
+    }
+
+    if (!application.viewed_at) {
+      db.prepare('UPDATE applications SET viewed_at = ? WHERE id = ?').run(now, id);
     }
 
     const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
@@ -189,6 +247,37 @@ router.put('/:id/status', (req: Request, res: Response): void => {
   } catch (error) {
     console.error('Error updating application status:', error);
     res.status(500).json({ success: false, error: 'Failed to update application status' });
+  }
+});
+
+router.get('/host/:hostId', (req: Request, res: Response): void => {
+  const { hostId } = req.params;
+
+  try {
+    const fleetRows = db.prepare('SELECT id, script_name, status FROM fleets WHERE host_id = ? ORDER BY created_at DESC').all(hostId) as { id: string; script_name: string; status: string }[];
+
+    const result = fleetRows.map((fleet) => {
+      const appRows = db.prepare('SELECT * FROM applications WHERE fleet_id = ? ORDER BY created_at DESC').all(fleet.id) as ApplicationRow[];
+      const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
+
+      const applications = appRows.map((row) => {
+        const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id) as UserRow;
+        const user = mapUserRow(userRow, reviewRows);
+        return mapApplicationRow(row, user);
+      });
+
+      return {
+        fleetId: fleet.id,
+        scriptName: fleet.script_name,
+        fleetStatus: fleet.status,
+        applications,
+      };
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error fetching host applications:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch host applications' });
   }
 });
 

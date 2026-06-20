@@ -41,6 +41,11 @@ export interface Fleet {
   createdAt: string;
 }
 
+export interface StatusTimelineEntry {
+  status: string;
+  timestamp: string;
+}
+
 export interface Application {
   id: string;
   fleetId: string;
@@ -51,7 +56,16 @@ export interface Application {
   acceptableEndTime: string;
   willingToWaitlist: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'waitlisted';
+  statusTimeline: StatusTimelineEntry[];
+  viewedAt: string | null;
   createdAt: string;
+}
+
+export interface HostFleetApplications {
+  fleetId: string;
+  scriptName: string;
+  fleetStatus: string;
+  applications: Application[];
 }
 
 export interface RadarSubscription {

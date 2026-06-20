@@ -1,4 +1,5 @@
 import { RadarPanel } from '../components/RadarPanel';
+import { NotificationCenter } from '../components/NotificationCenter';
 
 export default function Radar() {
   return (
@@ -20,7 +21,10 @@ export default function Radar() {
         </p>
       </div>
 
-      <RadarPanel />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <RadarPanel />
+        <NotificationCenter />
+      </div>
     </div>
   );
 }

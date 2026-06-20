@@ -1,5 +1,6 @@
 import { User, Fingerprint, Award, Car, Clock, Star, FileText } from 'lucide-react';
 import { useUserStore } from '../store/useUserStore';
+import { HostApplicationManager } from '../components/HostApplicationManager';
 
 export default function Profile() {
   const { currentUser } = useUserStore();
@@ -205,6 +206,10 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {currentUser.hostedCount > 0 && (
+        <HostApplicationManager />
+      )}
     </div>
   );
 }

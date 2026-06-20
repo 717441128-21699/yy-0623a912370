@@ -7,6 +7,7 @@ import type {
   RadarSubscriptionCreateInput,
   FleetMatch,
   FleetCreateInput,
+  HostFleetApplications,
 } from '../../shared';
 
 const API_BASE = '/api';
@@ -82,6 +83,14 @@ export const applicationApi = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
+
+  markViewed: (id: string) =>
+    request<Application>(`/applications/${id}/view`, {
+      method: 'PUT',
+    }),
+
+  getHostApplications: (hostId: string) =>
+    request<HostFleetApplications[]>(`/applications/host/${hostId}`),
 };
 
 export const radarApi = {
@@ -98,7 +107,14 @@ export const radarApi = {
       method: 'DELETE',
     }),
 
-  getMatches: () => request<FleetMatch[]>('/radar/matches'),
+  getMatches: (params?: { scriptName?: string; city?: string; unreadOnly?: boolean }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.scriptName) searchParams.append('scriptName', params.scriptName);
+    if (params?.city) searchParams.append('city', params.city);
+    if (params?.unreadOnly) searchParams.append('unreadOnly', '1');
+    const query = searchParams.toString();
+    return request<FleetMatch[]>(`/radar/matches${query ? `?${query}` : ''}`);
+  },
 
   markMatchRead: (id: string) =>
     request<{ success: boolean }>(`/radar/matches/${id}/read`, {
