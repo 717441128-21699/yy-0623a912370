@@ -127,6 +127,28 @@ function mapSubscriptionRow(row: SubscriptionRow): RadarSubscription {
   };
 }
 
+function parseFleetTime(timeStr: string): Date {
+  const isoMatch = timeStr.match(/^\d{4}-\d{2}-\d{2}T/);
+  if (isoMatch) return new Date(timeStr);
+  const parts = timeStr.split(/[- :]/);
+  if (parts.length >= 5) {
+    return new Date(
+      parseInt(parts[0]),
+      parseInt(parts[1]) - 1,
+      parseInt(parts[2]),
+      parseInt(parts[3]),
+      parseInt(parts[4])
+    );
+  }
+  return new Date(timeStr);
+}
+
+function isFleetInFuture(fleet: FleetRow): boolean {
+  const fleetDate = parseFleetTime(fleet.start_time);
+  const now = new Date();
+  return fleetDate > now;
+}
+
 function checkAndCreateMatches() {
   const subscriptions = db.prepare('SELECT * FROM radar_subscriptions').all() as SubscriptionRow[];
   const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
@@ -137,6 +159,8 @@ function checkAndCreateMatches() {
     ).all(sub.city, sub.script_name) as FleetRow[];
 
     for (const fleet of fleets) {
+      if (!isFleetInFuture(fleet)) continue;
+
       const existingMatch = db.prepare(
         'SELECT * FROM fleet_matches WHERE subscription_id = ? AND fleet_id = ?'
       ).get(sub.id, fleet.id);
@@ -227,22 +251,23 @@ router.get('/matches', (req: Request, res: Response): void => {
     const subRows = db.prepare('SELECT * FROM radar_subscriptions').all() as SubscriptionRow[];
     const subMap = new Map(subRows.map((s) => [s.id, mapSubscriptionRow(s)]));
 
-    const matches: FleetMatch[] = matchRows.map((row) => {
-      const fleetRow = db.prepare('SELECT * FROM fleets WHERE id = ?').get(row.fleet_id) as FleetRow;
+    const matches: FleetMatch[] = [];
+    for (const row of matchRows) {
+      const fleetRow = db.prepare('SELECT * FROM fleets WHERE id = ?').get(row.fleet_id) as FleetRow | undefined;
+      if (!fleetRow || !isFleetInFuture(fleetRow)) continue;
       const hostRow = db.prepare('SELECT * FROM users WHERE id = ?').get(fleetRow.host_id) as UserRow;
       const host = mapUserRow(hostRow, reviewRows);
       const fleet = mapFleetRow(fleetRow, host);
       const subscription = subMap.get(row.subscription_id);
-
-      return {
+      matches.push({
         id: row.id,
         subscriptionId: row.subscription_id,
         subscription,
         fleet,
         matchedAt: row.matched_at,
         isRead: row.is_read === 1,
-      };
-    });
+      });
+    }
 
     res.json({ success: true, data: matches });
   } catch (error) {

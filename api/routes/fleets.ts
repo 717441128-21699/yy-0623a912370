@@ -97,8 +97,48 @@ function mapFleetRow(row: FleetRow, host: User): Fleet {
   };
 }
 
+function getTimeRange(timeKey: string): { start: string; end: string } | null {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+  const dayOfWeek = now.getDay();
+  const startOfWeek = new Date(startOfDay.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+  const endOfWeek = new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+
+  const saturday = new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000);
+  const sunday = new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000 - 1);
+
+  switch (timeKey) {
+    case 'today':
+      return { start: startOfDay.toISOString(), end: endOfDay.toISOString() };
+    case 'week':
+      return { start: startOfWeek.toISOString(), end: endOfWeek.toISOString() };
+    case 'weekend':
+      return { start: saturday.toISOString(), end: sunday.toISOString() };
+    default:
+      return null;
+  }
+}
+
+function parseFleetTime(timeStr: string): Date {
+  const isoMatch = timeStr.match(/^\d{4}-\d{2}-\d{2}T/);
+  if (isoMatch) return new Date(timeStr);
+  const parts = timeStr.split(/[- :]/);
+  if (parts.length >= 5) {
+    return new Date(
+      parseInt(parts[0]),
+      parseInt(parts[1]) - 1,
+      parseInt(parts[2]),
+      parseInt(parts[3]),
+      parseInt(parts[4])
+    );
+  }
+  return new Date(timeStr);
+}
+
 router.get('/', (req: Request, res: Response): void => {
-  const { city, district, type, time } = req.query;
+  const { city, district, type, startTime } = req.query;
 
   let sql = 'SELECT * FROM fleets WHERE status = ?';
   const params: (string | number)[] = ['recruiting'];
@@ -118,22 +158,27 @@ router.get('/', (req: Request, res: Response): void => {
     params.push(type);
   }
 
-  if (time && typeof time === 'string' && time !== '全部') {
-    sql += ' AND start_time LIKE ?';
-    params.push(`%${time}%`);
-  }
-
   sql += ' ORDER BY start_time ASC';
 
   try {
     const fleetRows = db.prepare(sql).all(...params) as FleetRow[];
     const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
 
-    const fleets: Fleet[] = fleetRows.map((row) => {
+    let fleets: Fleet[] = fleetRows.map((row) => {
       const hostRow = db.prepare('SELECT * FROM users WHERE id = ?').get(row.host_id) as UserRow;
       const host = mapUserRow(hostRow, reviewRows);
       return mapFleetRow(row, host);
     });
+
+    if (startTime && typeof startTime === 'string' && startTime !== '全部' && startTime !== '') {
+      const timeRange = getTimeRange(startTime);
+      if (timeRange) {
+        fleets = fleets.filter((fleet) => {
+          const fleetDate = parseFleetTime(fleet.startTime);
+          return fleetDate >= new Date(timeRange.start) && fleetDate <= new Date(timeRange.end);
+        });
+      }
+    }
 
     res.json({ success: true, data: fleets });
   } catch (error) {

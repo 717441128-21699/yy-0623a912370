@@ -8,6 +8,7 @@ export function initMockData() {
   }
 
   const users = [
+    { id: 'current-user', nickname: '匿名玩家', avatar: '🎭', reputation: 100, hosted_count: 0, ghost_count: 0, play_styles: JSON.stringify([]) },
     { id: 'u1', nickname: '推理迷小王', avatar: '🕵️', reputation: 95, hosted_count: 12, ghost_count: 0, play_styles: JSON.stringify(['硬核推理', '本格']) },
     { id: 'u2', nickname: '情感水龙头', avatar: '🎭', reputation: 88, hosted_count: 8, ghost_count: 1, play_styles: JSON.stringify(['情感沉浸', '古风']) },
     { id: 'u3', nickname: '恐怖坦克', avatar: '👻', reputation: 92, hosted_count: 15, ghost_count: 0, play_styles: JSON.stringify(['恐怖惊悚', '变格']) },
@@ -29,12 +30,13 @@ export function initMockData() {
   console.log(`Inserted ${users.length} users`);
 
   const fleets = [
-    { id: 'f1', script_name: '《持斧奥夫》', is_city_limited: 1, script_type: '硬核推理', atmosphere: '硬核推理', city: '上海', district: '静安区', location: '南京西路某店', start_time: '2026-06-22 19:00', total_players: 6, current_players: 4, host_id: 'u1', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '硬核本，需要有推理基础的玩家' },
-    { id: 'f2', script_name: '《苍岐》', is_city_limited: 1, script_type: '情感沉浸', atmosphere: '情感沉浸', city: '上海', district: '徐汇区', location: '徐家汇某店', start_time: '2026-06-23 14:00', total_players: 6, current_players: 3, host_id: 'u2', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6']), status: 'recruiting', notes: '古风情感本，备好纸巾' },
-    { id: 'f3', script_name: '《青山》', is_city_limited: 0, script_type: '恐怖惊悚', atmosphere: '恐怖惊悚', city: '北京', district: '朝阳区', location: '三里屯某店', start_time: '2026-06-22 20:00', total_players: 6, current_players: 5, host_id: 'u3', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '有单人搜证，胆小勿入' },
-    { id: 'f4', script_name: '《搞钱》', is_city_limited: 0, script_type: '欢乐撕逼', atmosphere: '欢乐撕逼', city: '上海', district: '黄浦区', location: '人民广场某店', start_time: '2026-06-24 18:30', total_players: 8, current_players: 5, host_id: 'u4', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6', '角色7', '角色8']), status: 'recruiting', notes: '欢乐机制本，适合新手' },
-    { id: 'f5', script_name: '《七月的少年》', is_city_limited: 1, script_type: '硬核推理', atmosphere: '硬核推理', city: '深圳', district: '南山区', location: '科技园某店', start_time: '2026-06-25 13:00', total_players: 6, current_players: 2, host_id: 'u5', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '硬核天花板，时长较长' },
-    { id: 'f6', script_name: '《无间冬夏》', is_city_limited: 1, script_type: '情感沉浸', atmosphere: '情感沉浸', city: '广州', district: '天河区', location: '珠江新城某店', start_time: '2026-06-23 19:30', total_players: 6, current_players: 4, host_id: 'u2', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6']), status: 'recruiting', notes: '现代情感本，立意深刻' },
+    { id: 'f0_old', script_name: '《过期旧车》', is_city_limited: 0, script_type: '硬核推理', atmosphere: '硬核推理', city: '上海', district: '静安区', location: '过期测试点', start_time: '2026-06-15 19:00', total_players: 6, current_players: 3, host_id: 'u1', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '过期车辆，用于测试雷达不匹配' },
+    { id: 'f1', script_name: '《持斧奥夫》', is_city_limited: 1, script_type: '硬核推理', atmosphere: '硬核推理', city: '上海', district: '静安区', location: '南京西路某店', start_time: '2026-06-21 19:00', total_players: 6, current_players: 4, host_id: 'u1', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '硬核本，需要有推理基础的玩家' },
+    { id: 'f2', script_name: '《苍岐》', is_city_limited: 1, script_type: '情感沉浸', atmosphere: '情感沉浸', city: '上海', district: '徐汇区', location: '徐家汇某店', start_time: '2026-06-22 14:00', total_players: 6, current_players: 3, host_id: 'u2', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6']), status: 'recruiting', notes: '古风情感本，备好纸巾' },
+    { id: 'f3', script_name: '《青山》', is_city_limited: 0, script_type: '恐怖惊悚', atmosphere: '恐怖惊悚', city: '北京', district: '朝阳区', location: '三里屯某店', start_time: '2026-06-21 20:00', total_players: 6, current_players: 5, host_id: 'u3', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '有单人搜证，胆小勿入' },
+    { id: 'f4', script_name: '《搞钱》', is_city_limited: 0, script_type: '欢乐撕逼', atmosphere: '欢乐撕逼', city: '上海', district: '黄浦区', location: '人民广场某店', start_time: '2026-06-27 18:30', total_players: 8, current_players: 5, host_id: 'u4', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6', '角色7', '角色8']), status: 'recruiting', notes: '欢乐机制本，适合新手' },
+    { id: 'f5', script_name: '《七月的少年》', is_city_limited: 1, script_type: '硬核推理', atmosphere: '硬核推理', city: '深圳', district: '南山区', location: '科技园某店', start_time: '2026-06-28 13:00', total_players: 6, current_players: 2, host_id: 'u5', roles: JSON.stringify(['角色A', '角色B', '角色C', '角色D', '角色E', '角色F']), status: 'recruiting', notes: '硬核天花板，时长较长' },
+    { id: 'f6', script_name: '《无间冬夏》', is_city_limited: 1, script_type: '情感沉浸', atmosphere: '情感沉浸', city: '广州', district: '天河区', location: '珠江新城某店', start_time: '2026-06-22 19:30', total_players: 6, current_players: 4, host_id: 'u2', roles: JSON.stringify(['角色1', '角色2', '角色3', '角色4', '角色5', '角色6']), status: 'recruiting', notes: '现代情感本，立意深刻' },
   ];
 
   const insertFleet = db.prepare(

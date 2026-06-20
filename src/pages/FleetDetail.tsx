@@ -1,13 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { MapPin, Clock, Users, Calendar, FileText, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useFleetStore } from '../store/useFleetStore';
 import { HostProfile } from '../components/HostProfile';
 import { ApplicationForm } from '../components/ApplicationForm';
+import { applicationApi } from '../utils/api';
+import { useUserStore } from '../store/useUserStore';
+import type { Application } from '../../shared';
 
 export default function FleetDetail() {
   const { id } = useParams<{ id: string }>();
   const { currentFleet, loading, error, fetchFleet, clearCurrentFleet } = useFleetStore();
+  const { currentUser } = useUserStore();
+  const [userApplication, setUserApplication] = useState<Application | null>(null);
+  const [checkingApplication, setCheckingApplication] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -16,8 +22,39 @@ export default function FleetDetail() {
     return () => clearCurrentFleet();
   }, [id, fetchFleet, clearCurrentFleet]);
 
+  useEffect(() => {
+    if (id && currentUser && currentFleet) {
+      setCheckingApplication(true);
+      applicationApi
+        .getApplications(id)
+        .then((apps) => {
+          const myApp = apps.find((a) => a.userId === currentUser.id) || null;
+          setUserApplication(myApp);
+        })
+        .catch(() => setUserApplication(null))
+        .finally(() => setCheckingApplication(false));
+    }
+  }, [id, currentUser, currentFleet]);
+
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const isoMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}T/);
+    let date: Date;
+    if (isoMatch) {
+      date = new Date(dateStr);
+    } else {
+      const parts = dateStr.split(/[- :]/);
+      if (parts.length >= 5) {
+        date = new Date(
+          parseInt(parts[0]),
+          parseInt(parts[1]) - 1,
+          parseInt(parts[2]),
+          parseInt(parts[3]),
+          parseInt(parts[4])
+        );
+      } else {
+        date = new Date(dateStr);
+      }
+    }
     const month = date.getMonth() + 1;
     const day = date.getDate();
     const hours = date.getHours().toString().padStart(2, '0');
@@ -184,10 +221,67 @@ export default function FleetDetail() {
             <HostProfile host={currentFleet.host} />
           </div>
 
-          {currentFleet.status === 'recruiting' && missingPlayers > 0 ? (
+          {checkingApplication ? (
+            <div className="card p-8">
+              <div className="flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                <span className="ml-3 text-parchment-200/70">正在查询申请状态...</span>
+              </div>
+            </div>
+          ) : userApplication ? (
+            <div className="card p-8 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-600/20 flex items-center justify-center">
+                <FileText className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h3 className="font-display text-xl font-bold text-parchment-100 mb-2">
+                您已提交申请
+              </h3>
+              <p className="text-parchment-200/70 mb-2">
+                申请状态：
+                <span className={`ml-2 font-medium ${
+                  userApplication.status === 'approved' ? 'text-emerald-400'
+                  : userApplication.status === 'rejected' ? 'text-wine-400'
+                  : userApplication.status === 'waitlisted' ? 'text-amber-400'
+                  : 'text-amber-300'
+                }`}>
+                  {userApplication.status === 'approved' ? '✅ 已通过'
+                  : userApplication.status === 'rejected' ? '❌ 未通过'
+                  : userApplication.status === 'waitlisted' ? '⏳ 候补中'
+                  : '🔍 审核中'}
+                </span>
+              </p>
+              {userApplication.status === 'pending' && (
+                <p className="text-parchment-200/50 text-sm">
+                  发起人将在 24 小时内审核您的申请，请耐心等待
+                </p>
+              )}
+              {userApplication.preferredRoles && userApplication.preferredRoles.length > 0 && (
+                <div className="mt-4 p-4 bg-noir-800/50 rounded-lg text-left">
+                  <p className="text-xs text-amber-300/70 mb-2">已选角色</p>
+                  <div className="flex flex-wrap gap-1">
+                    {userApplication.preferredRoles.map((r) => (
+                      <span key={r} className="px-2 py-1 text-xs rounded bg-noir-700 text-parchment-200/80">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : currentFleet.status === 'recruiting' && missingPlayers > 0 ? (
             <ApplicationForm
               fleet={currentFleet}
-              onSuccess={() => {}}
+              onSuccess={async () => {
+                if (id && currentUser) {
+                  try {
+                    const apps = await applicationApi.getApplications(id);
+                    const myApp = apps.find((a) => a.userId === currentUser.id) || null;
+                    setUserApplication(myApp);
+                  } catch {
+                    setUserApplication(null);
+                  }
+                }
+              }}
             />
           ) : (
             <div className="card p-8 text-center">

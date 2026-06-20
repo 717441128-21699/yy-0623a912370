@@ -43,9 +43,18 @@ export function RadarPanel() {
       notifySite,
     };
 
+    const prevMatchCount = safeMatches.length;
     await addSubscription(data);
     setScriptName('');
     setShowForm(false);
+
+    setTimeout(() => {
+      const { matches: newMatches } = useRadarStore.getState();
+      const safeNewMatches = Array.isArray(newMatches) ? newMatches : [];
+      if (safeNewMatches.length > prevMatchCount) {
+        setActiveTab('matches');
+      }
+    }, 300);
   };
 
   const safeMatches = Array.isArray(matches) ? matches : [];
