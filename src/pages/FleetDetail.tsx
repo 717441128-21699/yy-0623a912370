@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapPin, Clock, Users, Calendar, FileText, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { MapPin, Clock, Users, Calendar, FileText, ArrowLeft, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useFleetStore } from '../store/useFleetStore';
 import { HostProfile } from '../components/HostProfile';
 import { ApplicationForm } from '../components/ApplicationForm';
@@ -254,6 +254,26 @@ export default function FleetDetail() {
                 </p>
               </div>
               <ApplicationTimeline application={userApplication} />
+              {(userApplication.applicantNote || userApplication.hostNote) && (
+                <div className="card p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-amber-400" />
+                    <span className="font-display text-sm font-semibold text-parchment-100">留言与备注</span>
+                  </div>
+                  {userApplication.applicantNote && (
+                    <div className="p-3 bg-noir-800/50 rounded-lg">
+                      <p className="text-xs text-amber-300/70 mb-1">我的留言</p>
+                      <p className="text-sm text-parchment-200/80">{userApplication.applicantNote}</p>
+                    </div>
+                  )}
+                  {userApplication.hostNote && (
+                    <div className="p-3 bg-emerald-600/5 rounded-lg border border-emerald-500/15">
+                      <p className="text-xs text-emerald-400/70 mb-1">发起人备注</p>
+                      <p className="text-sm text-parchment-200/80">{userApplication.hostNote}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : currentFleet.status === 'recruiting' && missingPlayers > 0 ? (
             <ApplicationForm

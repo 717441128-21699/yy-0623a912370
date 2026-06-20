@@ -58,6 +58,8 @@ export interface Application {
   status: 'pending' | 'approved' | 'rejected' | 'waitlisted';
   statusTimeline: StatusTimelineEntry[];
   viewedAt: string | null;
+  applicantNote: string;
+  hostNote: string;
   createdAt: string;
 }
 
@@ -65,6 +67,8 @@ export interface HostFleetApplications {
   fleetId: string;
   scriptName: string;
   fleetStatus: string;
+  currentPlayers: number;
+  totalPlayers: number;
   applications: Application[];
 }
 
@@ -109,6 +113,7 @@ export interface ApplicationCreateInput {
   redFlags: string[];
   acceptableEndTime: string;
   willingToWaitlist: boolean;
+  applicantNote?: string;
 }
 
 export interface RadarSubscriptionCreateInput {

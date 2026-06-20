@@ -78,10 +78,10 @@ export const applicationApi = {
   getApplications: (fleetId: string) =>
     request<Application[]>(`/fleets/${fleetId}/applications`),
 
-  updateStatus: (id: string, status: Application['status']) =>
+  updateStatus: (id: string, status: Application['status'], hostNote?: string) =>
     request<Application>(`/applications/${id}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, hostNote }),
     }),
 
   markViewed: (id: string) =>
@@ -89,12 +89,27 @@ export const applicationApi = {
       method: 'PUT',
     }),
 
+  updateHostNote: (id: string, hostNote: string) =>
+    request<Application>(`/applications/${id}/host-note`, {
+      method: 'PUT',
+      body: JSON.stringify({ hostNote }),
+    }),
+
+  markFleetViewed: (hostId: string, fleetId: string) =>
+    request<{ updated: boolean }>(`/applications/host/${hostId}/mark-viewed`, {
+      method: 'POST',
+      body: JSON.stringify({ fleetId }),
+    }),
+
   getHostApplications: (hostId: string) =>
     request<HostFleetApplications[]>(`/applications/host/${hostId}`),
 };
 
 export const radarApi = {
-  getSubscriptions: () => request<RadarSubscription[]>('/radar/subscriptions'),
+  getSubscriptions: (userId?: string) => {
+    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return request<RadarSubscription[]>(`/radar/subscriptions${params}`);
+  },
 
   createSubscription: (data: RadarSubscriptionCreateInput) =>
     request<RadarSubscription>('/radar/subscriptions', {
@@ -107,11 +122,12 @@ export const radarApi = {
       method: 'DELETE',
     }),
 
-  getMatches: (params?: { scriptName?: string; city?: string; unreadOnly?: boolean }) => {
+  getMatches: (params?: { scriptName?: string; city?: string; unreadOnly?: boolean; userId?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.scriptName) searchParams.append('scriptName', params.scriptName);
     if (params?.city) searchParams.append('city', params.city);
     if (params?.unreadOnly) searchParams.append('unreadOnly', '1');
+    if (params?.userId) searchParams.append('userId', params.userId);
     const query = searchParams.toString();
     return request<FleetMatch[]>(`/radar/matches${query ? `?${query}` : ''}`);
   },
@@ -119,5 +135,11 @@ export const radarApi = {
   markMatchRead: (id: string) =>
     request<{ success: boolean }>(`/radar/matches/${id}/read`, {
       method: 'PUT',
+    }),
+
+  batchMarkRead: (data: { userId?: string; matchIds?: string[] }) =>
+    request<{ success: boolean }>('/radar/matches/batch-read', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };

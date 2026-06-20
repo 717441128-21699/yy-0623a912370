@@ -15,6 +15,8 @@ interface ApplicationRow {
   status: string;
   status_timeline: string;
   viewed_at: string | null;
+  applicant_note: string;
+  host_note: string;
   created_at: string;
 }
 
@@ -88,6 +90,8 @@ function mapApplicationRow(row: ApplicationRow, user?: User): Application {
     status: row.status as Application['status'],
     statusTimeline: JSON.parse(row.status_timeline || '[]'),
     viewedAt: row.viewed_at,
+    applicantNote: row.applicant_note || '',
+    hostNote: row.host_note || '',
     createdAt: row.created_at,
   };
 }
@@ -119,8 +123,8 @@ router.post('/:fleetId/applications', (req: Request, res: Response): void => {
     const timeline: TimelineEntry[] = [{ status: 'pending', timestamp: createdAt }];
 
     db.prepare(
-      `INSERT INTO applications (id, fleet_id, user_id, preferred_roles, red_flags, acceptable_end_time, willing_to_waitlist, status, status_timeline, viewed_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
+      `INSERT INTO applications (id, fleet_id, user_id, preferred_roles, red_flags, acceptable_end_time, willing_to_waitlist, status, status_timeline, viewed_at, applicant_note, host_note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', ?)`
     ).run(
       id,
       fleetId,
@@ -131,6 +135,7 @@ router.post('/:fleetId/applications', (req: Request, res: Response): void => {
       input.willingToWaitlist ? 1 : 0,
       'pending',
       JSON.stringify(timeline),
+      input.applicantNote || '',
       createdAt
     );
 
@@ -203,7 +208,7 @@ router.put('/:id/view', (req: Request, res: Response): void => {
 
 router.put('/:id/status', (req: Request, res: Response): void => {
   const { id } = req.params;
-  const { status } = req.body as { status: string };
+  const { status, hostNote } = req.body as { status: string; hostNote?: string };
 
   if (!status || !['pending', 'approved', 'rejected', 'waitlisted'].includes(status)) {
     res.status(400).json({ success: false, error: 'Invalid status' });
@@ -221,7 +226,12 @@ router.put('/:id/status', (req: Request, res: Response): void => {
     const timeline: TimelineEntry[] = JSON.parse(application.status_timeline || '[]');
     timeline.push({ status, timestamp: now });
 
-    db.prepare('UPDATE applications SET status = ?, status_timeline = ? WHERE id = ?').run(status, JSON.stringify(timeline), id);
+    const noteUpdate = hostNote !== undefined ? ', host_note = ?' : '';
+    const noteParams = hostNote !== undefined ? [hostNote] : [];
+
+    db.prepare(
+      `UPDATE applications SET status = ?, status_timeline = ?${noteUpdate} WHERE id = ?`
+    ).run(...[status, JSON.stringify(timeline), ...noteParams, id] as never[]);
 
     if (status === 'approved') {
       db.prepare('UPDATE fleets SET current_players = current_players + 1 WHERE id = ?').run(application.fleet_id);
@@ -250,11 +260,66 @@ router.put('/:id/status', (req: Request, res: Response): void => {
   }
 });
 
+router.put('/:id/host-note', (req: Request, res: Response): void => {
+  const { id } = req.params;
+  const { hostNote } = req.body as { hostNote: string };
+
+  try {
+    const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(id) as ApplicationRow | undefined;
+    if (!application) {
+      res.status(404).json({ success: false, error: 'Application not found' });
+      return;
+    }
+
+    db.prepare('UPDATE applications SET host_note = ? WHERE id = ?').run(hostNote || '', id);
+
+    const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
+    const applicationRow = db.prepare('SELECT * FROM applications WHERE id = ?').get(id) as ApplicationRow;
+    const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(applicationRow.user_id) as UserRow;
+    const user = mapUserRow(userRow, reviewRows);
+    const updatedApplication = mapApplicationRow(applicationRow, user);
+
+    res.json({ success: true, data: updatedApplication });
+  } catch (error) {
+    console.error('Error updating host note:', error);
+    res.status(500).json({ success: false, error: 'Failed to update host note' });
+  }
+});
+
+router.post('/host/:hostId/mark-viewed', (req: Request, res: Response): void => {
+  const { hostId } = req.params;
+  const { fleetId } = req.body as { fleetId?: string };
+
+  try {
+    const now = new Date().toISOString();
+    if (fleetId) {
+      db.prepare(
+        "UPDATE applications SET viewed_at = ? WHERE fleet_id = ? AND viewed_at IS NULL AND user_id IN (SELECT id FROM applications WHERE fleet_id = ?)"
+      ).run(now, fleetId, fleetId);
+      db.prepare(
+        "UPDATE applications SET viewed_at = ? WHERE fleet_id = ? AND viewed_at IS NULL"
+      ).run(now, fleetId);
+    } else {
+      const fleetRows = db.prepare('SELECT id FROM fleets WHERE host_id = ?').all(hostId) as { id: string }[];
+      for (const fleet of fleetRows) {
+        db.prepare(
+          "UPDATE applications SET viewed_at = ? WHERE fleet_id = ? AND viewed_at IS NULL"
+        ).run(now, fleet.id);
+      }
+    }
+
+    res.json({ success: true, data: { updated: true } });
+  } catch (error) {
+    console.error('Error marking applications as viewed:', error);
+    res.status(500).json({ success: false, error: 'Failed to mark as viewed' });
+  }
+});
+
 router.get('/host/:hostId', (req: Request, res: Response): void => {
   const { hostId } = req.params;
 
   try {
-    const fleetRows = db.prepare('SELECT id, script_name, status FROM fleets WHERE host_id = ? ORDER BY created_at DESC').all(hostId) as { id: string; script_name: string; status: string }[];
+    const fleetRows = db.prepare('SELECT id, script_name, status, current_players, total_players FROM fleets WHERE host_id = ? ORDER BY created_at DESC').all(hostId) as { id: string; script_name: string; status: string; current_players: number; total_players: number }[];
 
     const result = fleetRows.map((fleet) => {
       const appRows = db.prepare('SELECT * FROM applications WHERE fleet_id = ? ORDER BY created_at DESC').all(fleet.id) as ApplicationRow[];
@@ -270,6 +335,8 @@ router.get('/host/:hostId', (req: Request, res: Response): void => {
         fleetId: fleet.id,
         scriptName: fleet.script_name,
         fleetStatus: fleet.status,
+        currentPlayers: fleet.current_players,
+        totalPlayers: fleet.total_players,
         applications,
       };
     });

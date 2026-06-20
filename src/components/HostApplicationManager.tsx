@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { UserCheck, UserX, Clock, ChevronDown, ChevronRight, Users, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { UserCheck, UserX, Clock, ChevronDown, ChevronRight, Users, CheckCircle2, MessageSquare, Filter } from 'lucide-react';
 import type { HostFleetApplications, Application } from '../../shared';
 import { applicationApi } from '../utils/api';
 import { useUserStore } from '../store/useUserStore';
@@ -32,6 +32,8 @@ const FLEET_STATUS_LABELS: Record<string, string> = {
   cancelled: '已取消',
 };
 
+type AppStatusFilter = 'all' | 'pending' | 'approved' | 'waitlisted' | 'rejected';
+
 export function HostApplicationManager() {
   const { currentUser } = useUserStore();
   const [fleetGroups, setFleetGroups] = useState<HostFleetApplications[]>([]);
@@ -40,6 +42,8 @@ export function HostApplicationManager() {
   const [actioningAppId, setActioningAppId] = useState<string | null>(null);
   const [successAppId, setSuccessAppId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<AppStatusFilter>('all');
+  const [fleetFilter, setFleetFilter] = useState<string>('all');
 
   const fetchApplications = async () => {
     if (!currentUser) return;
@@ -58,24 +62,26 @@ export function HostApplicationManager() {
     fetchApplications();
   }, [currentUser]);
 
-  const toggleFleet = (fleetId: string) => {
+  const toggleFleet = async (fleetId: string) => {
     setExpandedFleets((prev) => {
       const next = new Set(prev);
       if (next.has(fleetId)) {
         next.delete(fleetId);
       } else {
         next.add(fleetId);
+        if (currentUser) {
+          applicationApi.markFleetViewed(currentUser.id, fleetId).catch(() => {});
+        }
       }
       return next;
     });
   };
 
-  const handleAction = async (appId: string, status: Application['status']) => {
+  const handleAction = async (appId: string, status: Application['status'], hostNote?: string) => {
     setActioningAppId(appId);
     setError(null);
     try {
-      await applicationApi.updateStatus(appId, status);
-      await applicationApi.markViewed(appId);
+      await applicationApi.updateStatus(appId, status, hostNote);
       setSuccessAppId(appId);
       setTimeout(() => setSuccessAppId(null), 2000);
       await fetchApplications();
@@ -85,6 +91,23 @@ export function HostApplicationManager() {
       setActioningAppId(null);
     }
   };
+
+  const filteredGroups = useMemo(() => {
+    let groups = fleetGroups;
+    if (fleetFilter !== 'all') {
+      groups = groups.filter((g) => g.fleetId === fleetFilter);
+    }
+    return groups.map((group) => ({
+      ...group,
+      applications: group.applications.filter((app) =>
+        statusFilter === 'all' ? true : app.status === statusFilter
+      ),
+    }));
+  }, [fleetGroups, statusFilter, fleetFilter]);
+
+  const totalPending = fleetGroups.reduce(
+    (sum, g) => sum + g.applications.filter((a) => a.status === 'pending').length, 0
+  );
 
   if (loading) {
     return (
@@ -109,6 +132,14 @@ export function HostApplicationManager() {
     );
   }
 
+  const statusFilterOptions: { value: AppStatusFilter; label: string; count: number }[] = [
+    { value: 'all', label: '全部', count: fleetGroups.reduce((s, g) => s + g.applications.length, 0) },
+    { value: 'pending', label: '待审核', count: totalPending },
+    { value: 'approved', label: '已通过', count: fleetGroups.reduce((s, g) => s + g.applications.filter((a) => a.status === 'approved').length, 0) },
+    { value: 'waitlisted', label: '候补', count: fleetGroups.reduce((s, g) => s + g.applications.filter((a) => a.status === 'waitlisted').length, 0) },
+    { value: 'rejected', label: '已拒绝', count: fleetGroups.reduce((s, g) => s + g.applications.filter((a) => a.status === 'rejected').length, 0) },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
@@ -116,6 +147,45 @@ export function HostApplicationManager() {
         <h2 className="font-display text-xl font-semibold text-parchment-100">
           报名申请管理
         </h2>
+        {totalPending > 0 && (
+          <span className="px-2 py-0.5 text-xs font-bold bg-amber-600/20 text-amber-300 border border-amber-500/30 rounded-full">
+            {totalPending} 待审核
+          </span>
+        )}
+      </div>
+
+      <div className="card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-amber-400/70" />
+          <span className="text-sm text-amber-300/80">筛选</span>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {statusFilterOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                statusFilter === opt.value
+                  ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+                  : 'bg-noir-800/50 border border-noir-700/40 text-parchment-200/60 hover:text-parchment-200'
+              }`}
+            >
+              {opt.label} ({opt.count})
+            </button>
+          ))}
+        </div>
+        <select
+          value={fleetFilter}
+          onChange={(e) => setFleetFilter(e.target.value)}
+          className="input-field text-sm"
+        >
+          <option value="all">所有车队</option>
+          {fleetGroups.map((g) => (
+            <option key={g.fleetId} value={g.fleetId}>
+              {g.scriptName}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -124,7 +194,7 @@ export function HostApplicationManager() {
         </div>
       )}
 
-      {fleetGroups.map((group) => {
+      {filteredGroups.map((group) => {
         const isExpanded = expandedFleets.has(group.fleetId);
         const pendingCount = group.applications.filter((a) => a.status === 'pending').length;
 
@@ -150,7 +220,7 @@ export function HostApplicationManager() {
                     </span>
                   </div>
                   <p className="text-sm text-parchment-200/60 mt-1">
-                    {group.applications.length} 份申请
+                    {group.currentPlayers}/{group.totalPlayers} 人
                     {pendingCount > 0 && (
                       <span className="text-amber-300 ml-1">({pendingCount} 待审核)</span>
                     )}
@@ -164,7 +234,7 @@ export function HostApplicationManager() {
                 <div className="divider-dashed" />
                 {group.applications.length === 0 ? (
                   <p className="text-parchment-200/50 text-sm text-center py-4">
-                    该车队暂无报名申请
+                    当前筛选下无报名申请
                   </p>
                 ) : (
                   group.applications.map((app) => (
@@ -190,13 +260,14 @@ interface ApplicationCardProps {
   application: Application;
   actioningAppId: string | null;
   successAppId: string | null;
-  onAction: (appId: string, status: Application['status']) => void;
+  onAction: (appId: string, status: Application['status'], hostNote?: string) => void;
 }
 
 function ApplicationCard({ application: app, actioningAppId, successAppId, onAction }: ApplicationCardProps) {
   const isActioning = actioningAppId === app.id;
   const isSuccess = successAppId === app.id;
   const isPending = app.status === 'pending';
+  const [hostNote, setHostNote] = useState(app.hostNote || '');
 
   return (
     <div className={`p-4 rounded-lg border transition-all ${
@@ -265,6 +336,26 @@ function ApplicationCard({ application: app, actioningAppId, successAppId, onAct
             </span>
           )}
         </div>
+
+        {app.applicantNote && (
+          <div className="p-3 bg-noir-900/50 rounded-lg border border-noir-700/30">
+            <div className="flex items-center gap-1 mb-1">
+              <MessageSquare className="w-3.5 h-3.5 text-amber-400/70" />
+              <span className="text-xs text-amber-300/70">玩家留言</span>
+            </div>
+            <p className="text-sm text-parchment-200/80">{app.applicantNote}</p>
+          </div>
+        )}
+
+        {app.hostNote && !isPending && (
+          <div className="p-3 bg-amber-600/5 rounded-lg border border-amber-500/15">
+            <div className="flex items-center gap-1 mb-1">
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400/70" />
+              <span className="text-xs text-emerald-400/70">我的备注</span>
+            </div>
+            <p className="text-sm text-parchment-200/80">{app.hostNote}</p>
+          </div>
+        )}
       </div>
 
       {isSuccess && (
@@ -275,35 +366,51 @@ function ApplicationCard({ application: app, actioningAppId, successAppId, onAct
       )}
 
       {isPending && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onAction(app.id, 'approved')}
-            disabled={isActioning}
-            className="btn-primary flex items-center gap-1.5 !bg-emerald-600 hover:!bg-emerald-500 text-sm"
-          >
-            {isActioning ? (
-              <div className="w-4 h-4 border-2 border-parchment-50/30 border-t-parchment-50 rounded-full animate-spin" />
-            ) : (
-              <UserCheck className="w-4 h-4" />
-            )}
-            通过
-          </button>
-          <button
-            onClick={() => onAction(app.id, 'rejected')}
-            disabled={isActioning}
-            className="btn-secondary flex items-center gap-1.5 !bg-wine-600/20 !text-wine-300 hover:!bg-wine-600/30 !border-wine-500/30 text-sm"
-          >
-            <UserX className="w-4 h-4" />
-            拒绝
-          </button>
-          <button
-            onClick={() => onAction(app.id, 'waitlisted')}
-            disabled={isActioning}
-            className="btn-secondary flex items-center gap-1.5 !bg-amber-600/15 !text-amber-300 hover:!bg-amber-600/25 !border-amber-500/25 text-sm"
-          >
-            <Clock className="w-4 h-4" />
-            候补
-          </button>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-parchment-200/50 mb-1 flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              审核备注（选填）
+            </label>
+            <input
+              type="text"
+              value={hostNote}
+              onChange={(e) => setHostNote(e.target.value)}
+              placeholder="写一句给玩家看的备注..."
+              maxLength={200}
+              className="input-field text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAction(app.id, 'approved', hostNote.trim() || undefined)}
+              disabled={isActioning}
+              className="btn-primary flex items-center gap-1.5 !bg-emerald-600 hover:!bg-emerald-500 text-sm"
+            >
+              {isActioning ? (
+                <div className="w-4 h-4 border-2 border-parchment-50/30 border-t-parchment-50 rounded-full animate-spin" />
+              ) : (
+                <UserCheck className="w-4 h-4" />
+              )}
+              通过
+            </button>
+            <button
+              onClick={() => onAction(app.id, 'rejected', hostNote.trim() || undefined)}
+              disabled={isActioning}
+              className="btn-secondary flex items-center gap-1.5 !bg-wine-600/20 !text-wine-300 hover:!bg-wine-600/30 !border-wine-500/30 text-sm"
+            >
+              <UserX className="w-4 h-4" />
+              拒绝
+            </button>
+            <button
+              onClick={() => onAction(app.id, 'waitlisted', hostNote.trim() || undefined)}
+              disabled={isActioning}
+              className="btn-secondary flex items-center gap-1.5 !bg-amber-600/15 !text-amber-300 hover:!bg-amber-600/25 !border-amber-500/25 text-sm"
+            >
+              <Clock className="w-4 h-4" />
+              候补
+            </button>
+          </div>
         </div>
       )}
     </div>

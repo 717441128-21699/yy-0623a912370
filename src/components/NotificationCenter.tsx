@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Filter, MapPin, Clock } from 'lucide-react';
+import { Bell, Filter, MapPin, Clock, CheckCheck } from 'lucide-react';
 import { CITIES } from '../../shared';
 import { useRadarStore } from '../store/useRadarStore';
 
 type StatusFilter = 'all' | 'unread' | 'read';
 
 export function NotificationCenter() {
-  const { matches, markMatchRead } = useRadarStore();
+  const { matches, markMatchRead, batchMarkRead } = useRadarStore();
 
   const [scriptName, setScriptName] = useState('');
   const [city, setCity] = useState('');
@@ -41,7 +41,18 @@ export function NotificationCenter() {
   }, [safeMatches, scriptName, city, statusFilter]);
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const isoMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}T/);
+    let date: Date;
+    if (isoMatch) {
+      date = new Date(dateStr);
+    } else {
+      const parts = dateStr.split(/[- :]/);
+      if (parts.length >= 5) {
+        date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]), parseInt(parts[3]), parseInt(parts[4]));
+      } else {
+        date = new Date(dateStr);
+      }
+    }
     const month = date.getMonth() + 1;
     const day = date.getDate();
     const hours = date.getHours().toString().padStart(2, '0');
@@ -57,6 +68,13 @@ export function NotificationCenter() {
     }
   };
 
+  const handleBatchRead = () => {
+    const unreadIds = filtered.unread.map((m) => m.id);
+    if (unreadIds.length > 0) {
+      batchMarkRead(unreadIds);
+    }
+  };
+
   const statusOptions: { value: StatusFilter; label: string }[] = [
     { value: 'all', label: '全部' },
     { value: 'unread', label: '未读' },
@@ -66,11 +84,27 @@ export function NotificationCenter() {
   return (
     <div className="space-y-6">
       <div className="card p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Bell className="w-5 h-5 text-amber-400 animate-pulse-amber" />
-          <h2 className="font-display text-xl font-semibold text-parchment-100">
-            通知中心
-          </h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-amber-400 animate-pulse-amber" />
+            <h2 className="font-display text-xl font-semibold text-parchment-100">
+              通知中心
+            </h2>
+            {filtered.unread.length > 0 && (
+              <span className="px-2 py-0.5 text-xs font-bold bg-emerald-600 text-parchment-50 rounded-full animate-pulse-amber">
+                {filtered.unread.length}
+              </span>
+            )}
+          </div>
+          {filtered.unread.length > 0 && (
+            <button
+              onClick={handleBatchRead}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/25 transition-all"
+            >
+              <CheckCheck className="w-4 h-4" />
+              全部已读
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">

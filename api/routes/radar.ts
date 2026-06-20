@@ -177,7 +177,13 @@ function checkAndCreateMatches() {
 
 router.get('/subscriptions', (req: Request, res: Response): void => {
   try {
-    const rows = db.prepare('SELECT * FROM radar_subscriptions ORDER BY created_at DESC').all() as SubscriptionRow[];
+    const { userId } = req.query;
+    let rows: SubscriptionRow[];
+    if (userId && typeof userId === 'string') {
+      rows = db.prepare('SELECT * FROM radar_subscriptions WHERE user_id = ? ORDER BY created_at DESC').all(userId) as SubscriptionRow[];
+    } else {
+      rows = db.prepare('SELECT * FROM radar_subscriptions ORDER BY created_at DESC').all() as SubscriptionRow[];
+    }
     const subscriptions: RadarSubscription[] = rows.map(mapSubscriptionRow);
     res.json({ success: true, data: subscriptions });
   } catch (error) {
@@ -246,12 +252,19 @@ router.get('/matches', (req: Request, res: Response): void => {
   try {
     checkAndCreateMatches();
 
-    const { scriptName, city, unreadOnly } = req.query;
+    const { scriptName, city, unreadOnly, userId } = req.query;
 
     const reviewRows = db.prepare('SELECT * FROM reviews').all() as ReviewRow[];
-    const matchRows = db.prepare('SELECT * FROM fleet_matches ORDER BY matched_at DESC').all() as MatchRow[];
+    let matchRows = db.prepare('SELECT * FROM fleet_matches ORDER BY matched_at DESC').all() as MatchRow[];
     const subRows = db.prepare('SELECT * FROM radar_subscriptions').all() as SubscriptionRow[];
     const subMap = new Map(subRows.map((s) => [s.id, mapSubscriptionRow(s)]));
+
+    if (userId && typeof userId === 'string') {
+      const userSubIds = new Set(
+        subRows.filter((s) => s.user_id === userId).map((s) => s.id)
+      );
+      matchRows = matchRows.filter((row) => userSubIds.has(row.subscription_id));
+    }
 
     const matches: FleetMatch[] = [];
     for (const row of matchRows) {
@@ -299,6 +312,32 @@ router.put('/matches/:id/read', (req: Request, res: Response): void => {
   } catch (error) {
     console.error('Error marking match as read:', error);
     res.status(500).json({ success: false, error: 'Failed to mark match as read' });
+  }
+});
+
+router.post('/matches/batch-read', (req: Request, res: Response): void => {
+  const { userId, matchIds } = req.body as { userId?: string; matchIds?: string[] };
+
+  try {
+    if (matchIds && matchIds.length > 0) {
+      const placeholders = matchIds.map(() => '?').join(',');
+      db.prepare(
+        `UPDATE fleet_matches SET is_read = 1 WHERE id IN (${placeholders})`
+      ).run(...matchIds);
+    } else if (userId) {
+      const userSubIds = db.prepare('SELECT id FROM radar_subscriptions WHERE user_id = ?').all(userId) as { id: string }[];
+      if (userSubIds.length > 0) {
+        const subPlaceholders = userSubIds.map(() => '?').join(',');
+        db.prepare(
+          `UPDATE fleet_matches SET is_read = 1 WHERE subscription_id IN (${subPlaceholders}) AND is_read = 0`
+        ).run(...userSubIds.map((s) => s.id));
+      }
+    }
+
+    res.json({ success: true, data: { success: true } });
+  } catch (error) {
+    console.error('Error batch marking as read:', error);
+    res.status(500).json({ success: false, error: 'Failed to batch mark as read' });
   }
 });
 

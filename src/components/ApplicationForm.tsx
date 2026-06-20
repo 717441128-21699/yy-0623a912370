@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, Check, AlertCircle } from 'lucide-react';
+import { Send, Check, AlertCircle, MessageSquare } from 'lucide-react';
 import type { Fleet } from '../../shared';
 import { RED_FLAGS } from '../../shared';
 import { applicationApi } from '../utils/api';
@@ -16,6 +16,7 @@ export function ApplicationForm({ fleet, onSuccess }: ApplicationFormProps) {
   const [redFlags, setRedFlags] = useState<string[]>([]);
   const [acceptableEndTime, setAcceptableEndTime] = useState('23:00');
   const [willingToWaitlist, setWillingToWaitlist] = useState(false);
+  const [applicantNote, setApplicantNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function ApplicationForm({ fleet, onSuccess }: ApplicationFormProps) {
         redFlags,
         acceptableEndTime,
         willingToWaitlist,
+        applicantNote: applicantNote.trim(),
       });
       setSubmitted(true);
       onSuccess();
@@ -177,6 +179,24 @@ export function ApplicationForm({ fleet, onSuccess }: ApplicationFormProps) {
           </label>
           <p className="text-xs text-parchment-200/50 ml-14 mt-1">
             当有玩家退出时，您将按顺序自动替补
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm text-amber-300/80 mb-2 flex items-center gap-1">
+            <MessageSquare className="w-3.5 h-3.5" />
+            留言备注（选填）
+          </label>
+          <textarea
+            value={applicantNote}
+            onChange={(e) => setApplicantNote(e.target.value)}
+            placeholder="到店时间、联系方式或其他想对发起人说的话..."
+            rows={2}
+            maxLength={200}
+            className="input-field resize-none"
+          />
+          <p className="text-xs text-parchment-200/50 mt-1">
+            发起人审核时可见，最多 200 字
           </p>
         </div>
 
